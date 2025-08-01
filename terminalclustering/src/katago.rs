@@ -47,11 +47,8 @@ pub struct AnalysisResponse {
 }
 
 pub struct KataGo {
-    /// Writable handle to the engine’s STDIN.
     stdin: Mutex<ChildStdin>,
-    /// Monotonically increasing request id generator.
     next_id: AtomicU32,
-    /// Map id → `oneshot::Sender` so the reader can wake up the correct caller.
     pending: Mutex<HashMap<String, oneshot::Sender<AnalysisResponse>>>,
 }
 
@@ -94,7 +91,6 @@ impl KataGo {
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            // If you want stderr too, add `.stderr(Stdio::null())` or `inherit`.
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn kataGo: {e}"))?;
 
@@ -119,7 +115,7 @@ impl KataGo {
         Ok(wrapper)
     }
 
-    /// Issue a single analysis request and wait for the final reply.
+    /// Issue a single analysis request and wait for the reply.
     pub async fn analyze(&self, moves: Vec<(String, String)>) -> Result<AnalysisResponse> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst).to_string();
 
