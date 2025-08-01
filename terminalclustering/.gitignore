@@ -1,2 +1,3 @@
-/target
-/analysis_logs
+analysis_logs
+target
+sgfs/outputs

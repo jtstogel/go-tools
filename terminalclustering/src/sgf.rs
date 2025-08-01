@@ -48,16 +48,17 @@ pub fn sgf_to_stones(sgf: &sgf_parse::GameTree) -> anyhow::Result<Vec<(String, S
         .collect())
 }
 
-pub fn write_as_sgf(stones: &Vec<(String, String)>, path: &str) -> anyhow::Result<()> {
-    let game_tree = stones.iter().rev().fold(None, |acc, (player, mv)| {
+pub fn stones_to_sgf(stones: &Vec<(String, String)>) -> anyhow::Result<sgf_parse::GameTree> {
+    let nodes = stones.iter().rev().fold(None, |acc, (player, mv)| {
         let mv_parsed = string_to_move(mv);
         let sgf_move = match mv_parsed {
             sgf_parse::go::Move::Pass => "".into(),
-            sgf_parse::go::Move::Move(point) => ((point.x + ('a' as u8)) as char).to_string() + ((point.y + ('a' as u8)) as char).to_string().as_str(),
+            sgf_parse::go::Move::Move(point) => {
+                ((point.x + ('a' as u8)) as char).to_string()
+                    + ((point.y + ('a' as u8)) as char).to_string().as_str()
+            }
         };
-        let properties = vec![
-            sgf_parse::go::Prop::new(player.clone(), vec![sgf_move]),
-        ];
+        let properties = vec![sgf_parse::go::Prop::new(player.clone(), vec![sgf_move])];
 
         let Some(child) = acc else {
             return Some(sgf_parse::SgfNode::new(properties, vec![], false));
@@ -65,21 +66,40 @@ pub fn write_as_sgf(stones: &Vec<(String, String)>, path: &str) -> anyhow::Resul
         Some(sgf_parse::SgfNode::new(properties, vec![child], false))
     });
 
-    let node = game_tree.ok_or_else(|| anyhow::Error::msg("bad board"))?;
+    let root = nodes.ok_or_else(|| anyhow::Error::msg("bad board"))?;
+    Ok(sgf_parse::GameTree::GoGame(root))
+}
 
-    Ok(fs::write(path, node.serialize())?)
+type GoSgfNode = sgf_parse::SgfNode<sgf_parse::go::Prop>;
+
+/// Combine all SGFs into one big game tree.
+pub fn combine_sgfs(games: &[sgf_parse::GameTree]) -> anyhow::Result<sgf_parse::GameTree> {
+    let nodes = games
+        .iter()
+        .map(|g| g.as_go_node())
+        .collect::<Result<Vec<_>, _>>()?;
+    let root = GoSgfNode::new(
+        vec![sgf_parse::go::Prop::new("B".into(), vec!["".into()])],
+        nodes.iter().map(|x| (*x).clone()).collect::<Vec<_>>(),
+        true,
+    );
+
+    Ok(sgf_parse::GameTree::GoGame(root))
+}
+
+pub fn save_game_sgf(game: &sgf_parse::GameTree, path: &str) -> anyhow::Result<()> {
+    Ok(fs::write(path, game.as_go_node()?.serialize())?)
 }
 
 #[cfg(test)]
 mod test {
     use crate::sgf::{move_to_string, string_to_move};
 
-
     #[test]
     fn test_move_string_conversions() {
         for x in 0..19u8 {
             for y in 0..19u8 {
-                let mv = sgf_parse::go::Move::Move(sgf_parse::go::Point{x, y});
+                let mv = sgf_parse::go::Move::Move(sgf_parse::go::Point { x, y });
                 assert_eq!(mv, string_to_move(&move_to_string(&mv)));
             }
         }

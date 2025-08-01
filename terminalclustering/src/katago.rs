@@ -1,9 +1,12 @@
 use anyhow::{Result, anyhow};
 use rand::distr::{Distribution, weighted::WeightedIndex};
 use std::{
-    collections::HashMap, process::Stdio, sync::{
-        atomic::{AtomicU32, Ordering}, Arc
-    }
+    collections::HashMap,
+    process::Stdio,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -52,27 +55,41 @@ pub struct KataGo {
     pending: Mutex<HashMap<String, oneshot::Sender<AnalysisResponse>>>,
 }
 
-fn pick_move(moves: &[AnalysisResponseMoveInfo]) -> anyhow::Result<&AnalysisResponseMoveInfo> {
-    let best_move = moves
+pub fn pick_move<'a>(
+    infos: &'a [AnalysisResponseMoveInfo],
+) -> Result<&'a AnalysisResponseMoveInfo> {
+    let (_, best) = infos
         .iter()
-        .max_by_key(|&m| (m.utility * 1000.0).round() as i64)
-        .ok_or_else(|| anyhow::Error::msg("no moves returned by KataGo"))?;
-    if best_move.mov == "pass" {
-        return Ok(best_move);
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.utility.total_cmp(&b.utility))
+        .ok_or_else(|| anyhow!("KataGo returned no moves"))?;
+
+    if best.mov == "pass" {
+        return Ok(best);
     }
 
-    let score = best_move.score_lead;
-    let dist = WeightedIndex::new(moves.iter().map(|mv| (mv.utility * 0.5).exp()))?;
-    let mut rng = rand::rng();
+    const SCORE_CUTOFF: f32 = 0.5;
+    let mut weights = Vec::<f32>::with_capacity(infos.len());
+    let mut kept = Vec::<usize>::new();
 
-    // Pick randomly according to utility among moves that are close to the same estimated score.
-    for _ in 0..10 {
-        let choice = &moves[dist.sample(&mut rng)];
-        if (score - choice.score_lead) < 0.5 && choice.mov != "pass" {
-            return Ok(choice);
+    for (i, m) in infos.iter().enumerate() {
+        if m.mov == "pass" {
+            continue;
         }
+        if best.score_lead - m.score_lead > SCORE_CUTOFF {
+            continue;
+        }
+
+        weights.push((m.utility - best.utility).exp());
+        kept.push(i);
     }
-    return Ok(best_move);
+
+    if kept.is_empty() {
+        return Ok(best);
+    }
+
+    let choice_idx = kept[WeightedIndex::new(&weights)?.sample(&mut rand::rng())];
+    Ok(&infos[choice_idx])
 }
 
 impl KataGo {
@@ -185,7 +202,13 @@ impl KataGo {
             } else {
                 format!("W+{:.1}", -score_for_black)
             };
-            println!("move {}: {} {}\t({})", stones.len(), analysis_result.root_info.current_player, mv.mov, score_str);
+            println!(
+                "move {}: {} {}\t({})",
+                stones.len(),
+                analysis_result.root_info.current_player,
+                mv.mov,
+                score_str
+            );
             stones.push((
                 analysis_result.root_info.current_player.clone(),
                 mv.mov.clone(),
