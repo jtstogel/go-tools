@@ -1,0 +1,33 @@
+module(name = "go-tools")
+
+bazel_dep(name = "rules_rust", version = "0.63.0")
+bazel_dep(name = "rules_foreign_cc", version = "0.12.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.85.0"],
+)
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "katago",
+    url = "https://github.com/lightvector/KataGo/archive/refs/tags/v1.16.3.zip",
+    integrity = "sha256-qfcPsHaT2+/EzRB/56MDev/oTL3jo8d9qLHuA9AAnUI=",
+    strip_prefix = "KataGo-1.16.3",
+    patches = [
+        "//third_party/katago/patches:001-MODULE.bazel.patch",
+        "//third_party/katago/patches:002-BUILD.patch",
+        "//third_party/katago/patches:003-cmake-install.patch",
+        "//third_party/katago/patches:004-allow-initial-match-sgf.patch",
+    ],
+)
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+
+crate.spec(package = "clap", version = "4", features = ["derive"])
+crate.spec(package = "anyhow", version = "1.0.98")
+
+crate.from_specs()
+use_repo(crate, "crates")

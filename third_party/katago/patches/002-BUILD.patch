@@ -1,0 +1,8 @@
+--- BUILD
++++ BUILD
+@@ -0,0 +1,5 @@
++filegroup(
++    name = "all",
++    srcs = glob(["**"]),
++    visibility = ["//visibility:public"],
++)

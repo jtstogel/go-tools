@@ -7,12 +7,26 @@ use std::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
+    time,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::ChildStdin,
     sync::{Mutex, MutexGuard, oneshot},
 };
+
+pub fn inc_move_count_and_print_debug_time() {
+    static GLOBAL_MOVE_COUNT: AtomicU32 = AtomicU32::new(0);
+    static GLOBAL_START_TIME: std::sync::LazyLock<time::Instant> =
+        std::sync::LazyLock::new(|| time::Instant::now());
+
+    let move_count = 1 + GLOBAL_MOVE_COUNT.fetch_add(1, Ordering::SeqCst);
+    let time_elapsed = GLOBAL_START_TIME.elapsed();
+    if move_count % 100 == 0 {
+        let time_per_move = time_elapsed.div_f32(move_count as f32);
+        println!("{} moves, time per move: {:?}", move_count, time_per_move);
+    }
+}
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +71,7 @@ pub struct KataGo {
 
 pub fn pick_move<'a>(
     infos: &'a [AnalysisResponseMoveInfo],
+    _: &AnalysisResponseRootInfo,
 ) -> Result<&'a AnalysisResponseMoveInfo> {
     let (_, best) = infos
         .iter()
@@ -68,27 +83,26 @@ pub fn pick_move<'a>(
         return Ok(best);
     }
 
-    const SCORE_CUTOFF: f32 = 0.5;
+    const UTILITY_CUTOFF: f32 = 0.01;
     let mut weights = Vec::<f32>::with_capacity(infos.len());
-    let mut kept = Vec::<usize>::new();
+    let mut candidates = Vec::<usize>::new();
 
     for (i, m) in infos.iter().enumerate() {
         if m.mov == "pass" {
             continue;
         }
-        if best.score_lead - m.score_lead > SCORE_CUTOFF {
+        if best.utility - m.utility > UTILITY_CUTOFF {
             continue;
         }
-
-        weights.push((m.utility - best.utility).exp());
-        kept.push(i);
+        weights.push(m.utility.exp());
+        candidates.push(i);
     }
 
-    if kept.is_empty() {
+    if candidates.is_empty() {
         return Ok(best);
     }
 
-    let choice_idx = kept[WeightedIndex::new(&weights)?.sample(&mut rand::rng())];
+    let choice_idx = candidates[WeightedIndex::new(&weights)?.sample(&mut rand::rng())];
     Ok(&infos[choice_idx])
 }
 
@@ -97,21 +111,27 @@ impl KataGo {
         katago_bin: impl AsRef<str>,
         config: impl AsRef<str>,
         model: impl AsRef<str>,
+        human_model: &Option<String>,
     ) -> Result<Arc<Self>> {
-        let mut child = tokio::process::Command::new(katago_bin.as_ref())
-            .args([
+        let mut args = vec![
                 "analysis",
                 "-config",
                 config.as_ref(),
                 "-model",
                 model.as_ref(),
-            ])
+        ];
+        if let Some(m) = human_model {
+            args.push("-human-model");
+            args.push(m);
+        };
+        let mut child = tokio::process::Command::new(katago_bin.as_ref())
+            .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn kataGo: {e}"))?;
 
-        let stdin = child
+            let stdin = child
             .stdin
             .take()
             .ok_or_else(|| anyhow!("Could not capture stdin"))?;
@@ -141,7 +161,7 @@ impl KataGo {
             initial_stones: vec![],
             moves: moves.clone(),
             rules: "tromp-taylor".into(),
-            komi: 7.5,
+            komi: 6.5,
             board_x_size: 19,
             board_y_size: 19,
         };
@@ -188,7 +208,9 @@ impl KataGo {
         let mut stones = initial_stones;
         loop {
             let analysis_result = self.analyze(stones.clone()).await?;
-            let mv = pick_move(&analysis_result.move_infos)?;
+            let mv = pick_move(&analysis_result.move_infos, &analysis_result.root_info)?;
+            inc_move_count_and_print_debug_time();
+
             if mv.mov == "pass" {
                 return Ok(stones);
             }
@@ -203,11 +225,12 @@ impl KataGo {
                 format!("W+{:.1}", -score_for_black)
             };
             println!(
-                "move {}: {} {}\t({})",
+                "move {}: {} {}\t({}) {:.3}",
                 stones.len(),
                 analysis_result.root_info.current_player,
                 mv.mov,
-                score_str
+                score_str,
+                mv.utility
             );
             stones.push((
                 analysis_result.root_info.current_player.clone(),

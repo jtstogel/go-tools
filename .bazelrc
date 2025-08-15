@@ -1,0 +1,2 @@
+# Use hermetic PATH to prevents gratuitous rebuilds.
+common --incompatible_strict_action_env

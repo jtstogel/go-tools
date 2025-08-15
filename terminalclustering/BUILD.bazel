@@ -1,0 +1,12 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+rust_binary(
+    name = "main",
+    crate_root = "main.rs",
+    srcs = ["**/*.rs"],
+    deps = [
+        "@crates//:anyhow",
+        "@crates//:clap",
+    ],
+    data = ["//third_party/katago"],
+)

@@ -1,0 +1,9 @@
+--- cpp/CMakeLists.txt
++++ cpp/CMakeLists.txt
+@@ -588,3 +588,6 @@ endif()
+ 
+ target_include_directories(katago PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+ 
++install(TARGETS katago
++        RUNTIME DESTINATION bin)
++
