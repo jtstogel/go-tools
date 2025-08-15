@@ -1,0 +1,40 @@
+diff --git a/cpp/command/match.cpp b/cpp/command/match.cpp
+index 9d7fbda9..54e2fedb 100644
+--- a/cpp/command/match.cpp
++++ b/cpp/command/match.cpp
+@@ -251,9 +251,25 @@ int MainCmds::match(const vector<string>& args) {
+   std::map<string,double> timeUsedByBotMap;
+   std::map<string,double> movesByBotMap;
+ 
++  std::unique_ptr<Sgf::PositionSample> startPos = NULL;
++  std::string initialPositionSgf = cfg.getString("initialPositionSgf");
++  int64_t initialPositionMoveNo = cfg.getInt64("initialPositionMoveNo");
++  if(!initialPositionSgf.empty()) {
++    Sgf* initialPos = Sgf::loadFile(initialPositionSgf);
++    std::vector<Move> moves;
++    initialPos->getMoves(moves, initialPos->getXYSize().x, initialPos->getXYSize().y);
++    if (initialPositionMoveNo > 0 && initialPositionMoveNo < moves.size()) {
++      moves.resize(initialPositionMoveNo);
++    }
++
++    startPos = std::make_unique<Sgf::PositionSample>();
++    startPos->moves = std::move(moves);
++    startPos->nextPla = initialPos->getFirstPlayerColor();
++  }
++
+   auto runMatchLoop = [
+     &gameRunner,&matchPairer,&sgfOutputDir,&logger,&gameSeedBase,&patternBonusTables,
+-    &statsMutex, &gameCount, &timeUsedByBotMap, &movesByBotMap
++    &statsMutex, &gameCount, &timeUsedByBotMap, &movesByBotMap, &startPos
+   ](
+     uint64_t threadHash
+   ) {
+@@ -283,7 +299,7 @@ int MainCmds::match(const vector<string>& args) {
+           search->setCopyOfExternalPatternBonusTable(patternBonusTables[spec.botIdx]);
+         };
+         gameData = gameRunner->runGame(
+-          seed, botSpecB, botSpecW, NULL, NULL, logger,
++          seed, botSpecB, botSpecW, NULL, startPos.get(), logger,
+           shouldStopFunc, shouldPause, nullptr, afterInitialization, nullptr
+         );
+       }
