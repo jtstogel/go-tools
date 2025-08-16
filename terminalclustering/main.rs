@@ -1,25 +1,31 @@
+mod sgf;
+mod config;
+
 use anyhow::Ok;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(long)]
     config: String,
 
-    #[arg(short, long)]
+    #[arg(long)]
     model: String,
 
     #[arg(long)]
     human_model: Option<String>,
 
-    #[arg(short, long)]
+    #[arg(long)]
     game: String,
 
-    #[arg(short, long)]
-    playouts: i32,
+    #[arg(long, default_value = "1000")]
+    max_visits: i32,
 
-    #[arg(short, long)]
+    #[arg(long)]
+    sample_size: i32,
+
+    #[arg(long)]
     output_dir: String,
 }
 

@@ -1,0 +1,4 @@
+build --color=yes
+build --curses=no
+build --@rules_rust//:extra_rustc_flags=--remap-path-prefix=$(pwd)=.
+build --@rules_rust//:error_format=human

@@ -1,12 +1,19 @@
-load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
 rust_binary(
     name = "main",
     crate_root = "main.rs",
-    srcs = ["**/*.rs"],
+    srcs = glob(["*.rs"]),
     deps = [
         "@crates//:anyhow",
         "@crates//:clap",
+        "@crates//:lazy-regex",
+        "@crates//:sgf-parse",
     ],
     data = ["//third_party/katago"],
+)
+
+rust_test(
+    name = "main_test",
+    crate = ":main",
 )
