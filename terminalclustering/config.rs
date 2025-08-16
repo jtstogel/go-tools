@@ -53,9 +53,6 @@ key2=value2
     fn test_whitespace() {
         let view = ConfigView::parse("key	=  value");
         assert_eq!(view.get("key"), Some("value"));
-        assert_eq!(view.get("key"), Some(""));
-
-        assert_eq!(1, 1);
     }
 
     #[test]
