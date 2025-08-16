@@ -5,6 +5,9 @@
       "label": "Start iBazel (rust)",
       "type": "shell",
       "command": "${workspaceFolder}/.vscode/rust/ibazel_rust.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "args": [],
       "isBackground": true,
       "problemMatcher": [
@@ -32,10 +35,19 @@
       "label": "Generate rust-project.json",
       "type": "shell",
       "command": "bazel",
-      "options": { "cwd": "${workspaceFolder}" },
-      "args": ["run", "@rules_rust//tools/rust_analyzer:gen_rust_project"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "args": [
+        "run",
+        "@rules_rust//tools/rust_analyzer:gen_rust_project"
+      ],
       "problemMatcher": [],
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ]
 }
